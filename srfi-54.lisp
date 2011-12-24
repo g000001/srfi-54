@@ -33,10 +33,10 @@
                               (functionp (cdr converter)) ))
           (precision nil (and (floatp precision)
                               (zerop (rem precision 1))))
-          (sign nil (eq 'sign sign))
-          (radix 'decimal
-                 (member radix '(decimal octal binary hexadecimal)) )
-          (exactness nil (member exactness '(exact inexact)))
+          (sign nil (eq :sign sign))
+          (radix :decimal
+                 (member radix '(:decimal :octal :binary :hexadecimal)) )
+          (exactness nil (member exactness '(:exact :inexact)))
           (separator nil (and (listp separator)
                               (< 0 (length separator) 3)
                               (characterp (car separator))
@@ -71,28 +71,28 @@
                                 str
                                 (make-string pad :initial-element char))) )))
                    ((numberp object)
-                    (and (not (eq radix 'decimal)) precision
+                    (and (not (eq radix :decimal)) precision
                          (error "cat: non-decimal cannot have a decimal point") )
-                    (and precision (< precision 0) (eq exactness 'exact)
+                    (and precision (< precision 0) (eq exactness :exact)
                          (error "cat: exact number cannot have a decimal point without exact sign") )
                     (let* ((exact-sign (and precision
                                             (<= 0 precision)
-                                            (or (eq exactness 'exact)
+                                            (or (eq exactness :exact)
                                                 (and (rationalp object)
                                                      (not (eq exactness
-                                                              'inexact ))))
+                                                              :inexact ))))
                                             "#e" ))
-                           (inexact-sign (and (not (eq radix 'decimal))
+                           (inexact-sign (and (not (eq radix :decimal))
                                               (or (and (not (rationalp object))
                                                        (not (eq exactness
-                                                                'exact )))
-                                                  (eq exactness 'inexact) )
+                                                                :exact )))
+                                                  (eq exactness :inexact) )
                                               "#i" ))
                            (radix-sign (cdr (assoc radix
-                                                  '((decimal . nil)
-                                                    (octal . "#o")
-                                                    (binary . "#b")
-                                                    (hexadecimal . "#x") ))))
+                                                  '((:decimal . nil)
+                                                    (:octal . "#o")
+                                                    (:binary . "#b")
+                                                    (:hexadecimal . "#x") ))))
                            (plus-sign (and sign (< 0 (realpart object)) "+"))
                            (exactness-sign (or exact-sign inexact-sign))
                            (str
@@ -109,20 +109,20 @@
                                        "i" )))
                                 (format nil
                                         "~VR"
-                                        (cdr (assoc radix '((decimal . 10)
-                                                            (octal . 8)
-                                                            (binary . 2)
-                                                            (hexadecimal . 16) )))
+                                        (cdr (assoc radix '((:decimal . 10)
+                                                            (:octal . 8)
+                                                            (:binary . 2)
+                                                            (:hexadecimal . 16) )))
                                         (cond
                                           (inexact-sign (rationalize object))
                                           (exactness
-                                           (if (eq exactness 'exact)
+                                           (if (eq exactness :exact)
                                                (rationalize object)
                                                (float object) ))
                                           (:else object) ))))
                            (str
                             (if (and separator
-                                     (not (or (and (eq radix 'decimal)
+                                     (not (or (and (eq radix :decimal)
                                                    (str-index str #\e) )
                                               (str-index str #\i)
                                               (str-index str #\/) )))
@@ -134,14 +134,14 @@
                                       (concatenate 'string
                                        (separate (subseq str 0 dot-index)
                                                  sep num (if (< object 0)
-                                                             'minus T))
+                                                             :minus T))
                                        "."
                                        (separate (subseq
                                                   str (+ 1 dot-index)
                                                   (length str) )
                                                  sep num nil))
                                       (separate str sep num (if (< object 0)
-                                                                'minus T))))
+                                                                :minus T))))
                                 str ))
                            (pad (- (abs width)
                                    (+ (length str)
@@ -396,14 +396,14 @@
 (defun separate (str sep num opt)
   (let* ((len (length str))
 	 (pos (if opt
-		  (let ((pos (rem (if (eq opt 'minus) (- len 1) len)
+		  (let ((pos (rem (if (eq opt :minus) (- len 1) len)
                                   num)))
 		    (if (= 0 pos) num pos))
 		  num)))
     (apply #'concatenate
            'string
 	   (let loop ((ini 0)
-		      (pos (if (eq opt 'minus) (+ pos 1) pos)))
+		      (pos (if (eq opt :minus) (+ pos 1) pos)))
 	     (if (< pos len)
 		 (cons (subseq str ini pos)
 		       (cons sep (loop pos (+ pos num))))
