@@ -4,7 +4,7 @@
 
 (defpackage :srfi-54
   (:use)
-  (:export))
+  (:export :cat))
 
 (defpackage :srfi-54.internal
   (:use :srfi-54 :cl :fiveam :mbe :srfi-5)
