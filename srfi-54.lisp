@@ -2,6 +2,172 @@
 
 (cl:in-package :srfi-54.internal)
 
+(define-syntax alet-cat*                ; borrowed from SRFI-86
+  (syntax-rules ()
+    ((alet-cat* z (a . e) bd ***)
+     (with ((y (gensym)))
+       (let ((y z))
+         (%alet-cat* y (a . e) bd ***))))))
+
+(define-syntax %alet-cat*               ; borrowed from SRFI-86
+  (syntax-rules ()
+    ((%alet-cat* z ((n d \t ***)) bd ***)
+     (let ((n (if (null z)
+		  d
+		  (if (null (cdr z))
+		      (wow-cat-end z n \t ***)
+		      (error "alet*: too many arguments" (cdr z))))))
+       bd ***))
+    ((%alet-cat* z ((n d \t ***) . e) bd ***)
+     (let ((n (if (null z)
+		  d
+                  (wow-cat! z n d \t ***))))
+       (%alet-cat* z e bd ***)))
+    ((%alet-cat* z e bd ***)
+     (let ((e z))
+       bd ***))))
+
+(define-syntax wow-cat!                 ; borrowed from SRFI-86
+  (syntax-rules ()
+    ((wow-cat! z n d)
+     (let ((n (car z)))
+       (setq z (cdr z))
+       n))
+    ((wow-cat! z n d \t)
+     (with ((lp (gensym)))
+       (let ((n (car z)))
+         (if \t
+             (progn (setq z (cdr z)) n)
+             (let lp ((head (list n)) (tail (cdr z)))
+                  (if (null tail)
+                      d
+                      (let ((n (car tail)))
+                        (if \t
+                            (progn (setq z (append (reverse head) (cdr tail))) n)
+                            (lp (cons n head) (cdr tail))))))))))
+    ((wow-cat! z n d \t ts)
+     (with ((lp (gensym)))
+       (let ((n (car z)))
+         (if \t
+             (progn (setq z (cdr z)) ts)
+             (let lp ((head (list n)) (tail (cdr z)))
+                  (if (null tail)
+                      d
+                      (let ((n (car tail)))
+                        (if \t
+                            (progn (setq z (append (reverse head) (cdr tail))) ts)
+                            (lp (cons n head) (cdr tail))))))))))
+    ((wow-cat! z n d \t ts fs)
+     (let ((n (car z)))
+       (if \t
+	   (progn (setq z (cdr z)) ts)
+	   (progn (setq z (cdr z)) fs))))))
+
+(define-syntax wow-cat-end              ; borrowed from SRFI-86
+  (syntax-rules ()
+    ((wow-cat-end z n)
+     (car z))
+    ((wow-cat-end z n \t)
+     (let ((n (car z)))
+       (if \t n (error "alet[*]: too many argument" z))))
+    ((wow-cat-end z n \t ts)
+     (let ((n (car z)))
+       (if \t ts (error "alet[*]: too many argument" z))))
+    ((wow-cat-end z n \t ts fs)
+     (let ((n (car z)))
+       (if \t ts fs)))))
+
+(defun str-index (str char)
+  (let ((len (length str)))
+    (let lp ((n 0))
+      (and (< n len)
+	   (if (char= char (char str n))
+	       n
+	       (lp (+ n 1)))))))
+
+(defun every? (pred ls)
+  (let lp ((ls ls))
+    (or (null ls)
+	(and (funcall pred (car ls))
+	     (lp (cdr ls))))))
+
+(defun part (pred ls)
+  (let lp ((ls ls) (true '()) (false '()))
+    (cond
+     ((null ls) (cons (reverse true) (reverse false)))
+     ((funcall pred (car ls)) (lp (cdr ls) (cons (car ls) true) false))
+     (:else (lp (cdr ls) true (cons (car ls) false))))))
+
+(defun e-mold (num pre)
+  (let* ((str (princ-to-string (float num)))
+	 (e-index (str-index str #\e)))
+    (if e-index
+	(concatenate 'string
+                     (mold (subseq str 0 e-index) pre)
+                     (subseq str e-index (length str)))
+	(mold str pre))))
+
+(defun mold (str pre)
+  (let ((ind (str-index str #\.)))
+    (if ind
+	(let ((d-len (- (length str) (+ ind 1))))
+	  (cond
+	   ((= d-len pre) str)
+	   ((< d-len pre) (concatenate 'string
+                                       str
+                                       (make-string (- pre d-len) :initial-element #\0)))
+	   ;;((char< #\4 (string-ref str (+ 1 ind pre)))
+	   ;;(let ((com (expt 10 pre)))
+	   ;;  (number->string (/ (round (* (string->number str) com)) com))))
+	   ((or (char< #\5 (char str (+ 1 ind pre)))
+		(and (char= #\5 (char str (+ 1 ind pre)))
+		     (or (< (+ 1 pre) d-len)
+			 (member (char str (+ ind (if (= 0 pre) -1 pre)))
+			       '(#\1 #\3 #\5 #\7 #\9)))))
+	    (coerce
+	     (let* ((minus (char= #\- (char str 0)))
+		    (str (subseq str (if minus 1 0) (+ 1 ind pre)))
+		    (char-list
+		     (reverse
+		      (let lp ((index (- (length str) 1))
+			       (raise T))
+			(if (= -1 index)
+			    (if raise '(#\1) '())
+			    (let ((chr (char str index)))
+			      (if (char= #\. chr)
+				  (cons chr (lp (- index 1) raise))
+				  (if raise
+				      (if (char= #\9 chr)
+					  (cons #\0 (lp (- index 1) raise))
+					  (cons (code-char
+						 (+ 1 (char-code chr)))
+						(lp (- index 1) nil)))
+				      (cons chr (lp (- index 1) raise))))))))))
+	       (if minus (cons #\- char-list) char-list))
+	     'STRING))
+	   (:else
+	    (subseq str 0 (+ 1 ind pre)))))
+	(concatenate 'string
+                     str
+                     "."
+                     (make-string pre :initial-element #\0)))))
+
+(defun separate (str sep num opt)
+  (let* ((len (length str))
+	 (pos (if opt
+		  (let ((pos (rem (if (eq opt :minus) (- len 1) len)
+                                  num)))
+		    (if (= 0 pos) num pos))
+		  num)))
+    (apply #'concatenate
+           'string
+	   (let loop ((ini 0)
+		      (pos (if (eq opt :minus) (+ pos 1) pos)))
+	     (if (< pos len)
+		 (cons (subseq str ini pos)
+		       (cons sep (loop pos (+ pos num))))
+		 (list (subseq str ini len)))))))
+
 (defun cat (object &rest rest)
   (let* ((str-rest (part #'stringp rest))
 	 (str-list (car str-rest))
@@ -242,171 +408,5 @@
                 (str (apply #'concatenate 'string str str-list)) )
            (and port (princ str port))
            str )))))
-
-(define-syntax alet-cat*                ; borrowed from SRFI-86
-  (syntax-rules ()
-    ((alet-cat* z (a . e) bd ***)
-     (with ((y (gensym)))
-       (let ((y z))
-         (%alet-cat* y (a . e) bd ***))))))
-
-(define-syntax %alet-cat*               ; borrowed from SRFI-86
-  (syntax-rules ()
-    ((%alet-cat* z ((n d \t ***)) bd ***)
-     (let ((n (if (null z)
-		  d
-		  (if (null (cdr z))
-		      (wow-cat-end z n \t ***)
-		      (error "alet*: too many arguments" (cdr z))))))
-       bd ***))
-    ((%alet-cat* z ((n d \t ***) . e) bd ***)
-     (let ((n (if (null z)
-		  d
-                  (wow-cat! z n d \t ***))))
-       (%alet-cat* z e bd ***)))
-    ((%alet-cat* z e bd ***)
-     (let ((e z))
-       bd ***))))
-
-(define-syntax wow-cat!                 ; borrowed from SRFI-86
-  (syntax-rules ()
-    ((wow-cat! z n d)
-     (let ((n (car z)))
-       (setq z (cdr z))
-       n))
-    ((wow-cat! z n d \t)
-     (with ((lp (gensym)))
-       (let ((n (car z)))
-         (if \t
-             (progn (setq z (cdr z)) n)
-             (let lp ((head (list n)) (tail (cdr z)))
-                  (if (null tail)
-                      d
-                      (let ((n (car tail)))
-                        (if \t
-                            (progn (setq z (append (reverse head) (cdr tail))) n)
-                            (lp (cons n head) (cdr tail))))))))))
-    ((wow-cat! z n d \t ts)
-     (with ((lp (gensym)))
-       (let ((n (car z)))
-         (if \t
-             (progn (setq z (cdr z)) ts)
-             (let lp ((head (list n)) (tail (cdr z)))
-                  (if (null tail)
-                      d
-                      (let ((n (car tail)))
-                        (if \t
-                            (progn (setq z (append (reverse head) (cdr tail))) ts)
-                            (lp (cons n head) (cdr tail))))))))))
-    ((wow-cat! z n d \t ts fs)
-     (let ((n (car z)))
-       (if \t
-	   (progn (setq z (cdr z)) ts)
-	   (progn (setq z (cdr z)) fs))))))
-
-(define-syntax wow-cat-end              ; borrowed from SRFI-86
-  (syntax-rules ()
-    ((wow-cat-end z n)
-     (car z))
-    ((wow-cat-end z n \t)
-     (let ((n (car z)))
-       (if \t n (error "alet[*]: too many argument" z))))
-    ((wow-cat-end z n \t ts)
-     (let ((n (car z)))
-       (if \t ts (error "alet[*]: too many argument" z))))
-    ((wow-cat-end z n \t ts fs)
-     (let ((n (car z)))
-       (if \t ts fs)))))
-
-(defun str-index (str char)
-  (let ((len (length str)))
-    (let lp ((n 0))
-      (and (< n len)
-	   (if (char= char (char str n))
-	       n
-	       (lp (+ n 1)))))))
-
-(defun every? (pred ls)
-  (let lp ((ls ls))
-    (or (null ls)
-	(and (funcall pred (car ls))
-	     (lp (cdr ls))))))
-
-(defun part (pred ls)
-  (let lp ((ls ls) (true '()) (false '()))
-    (cond
-     ((null ls) (cons (reverse true) (reverse false)))
-     ((funcall pred (car ls)) (lp (cdr ls) (cons (car ls) true) false))
-     (:else (lp (cdr ls) true (cons (car ls) false))))))
-
-(defun e-mold (num pre)
-  (let* ((str (princ-to-string (float num)))
-	 (e-index (str-index str #\e)))
-    (if e-index
-	(concatenate 'string
-                     (mold (subseq str 0 e-index) pre)
-                     (subseq str e-index (length str)))
-	(mold str pre))))
-
-(defun mold (str pre)
-  (let ((ind (str-index str #\.)))
-    (if ind
-	(let ((d-len (- (length str) (+ ind 1))))
-	  (cond
-	   ((= d-len pre) str)
-	   ((< d-len pre) (concatenate 'string
-                                       str
-                                       (make-string (- pre d-len) :initial-element #\0)))
-	   ;;((char< #\4 (string-ref str (+ 1 ind pre)))
-	   ;;(let ((com (expt 10 pre)))
-	   ;;  (number->string (/ (round (* (string->number str) com)) com))))
-	   ((or (char< #\5 (char str (+ 1 ind pre)))
-		(and (char= #\5 (char str (+ 1 ind pre)))
-		     (or (< (+ 1 pre) d-len)
-			 (member (char str (+ ind (if (= 0 pre) -1 pre)))
-			       '(#\1 #\3 #\5 #\7 #\9)))))
-	    (coerce
-	     (let* ((minus (char= #\- (char str 0)))
-		    (str (subseq str (if minus 1 0) (+ 1 ind pre)))
-		    (char-list
-		     (reverse
-		      (let lp ((index (- (length str) 1))
-			       (raise T))
-			(if (= -1 index)
-			    (if raise '(#\1) '())
-			    (let ((chr (char str index)))
-			      (if (char= #\. chr)
-				  (cons chr (lp (- index 1) raise))
-				  (if raise
-				      (if (char= #\9 chr)
-					  (cons #\0 (lp (- index 1) raise))
-					  (cons (code-char
-						 (+ 1 (char-code chr)))
-						(lp (- index 1) nil)))
-				      (cons chr (lp (- index 1) raise))))))))))
-	       (if minus (cons #\- char-list) char-list))
-	     'STRING))
-	   (:else
-	    (subseq str 0 (+ 1 ind pre)))))
-	(concatenate 'string
-                     str
-                     "."
-                     (make-string pre :initial-element #\0)))))
-
-(defun separate (str sep num opt)
-  (let* ((len (length str))
-	 (pos (if opt
-		  (let ((pos (rem (if (eq opt :minus) (- len 1) len)
-                                  num)))
-		    (if (= 0 pos) num pos))
-		  num)))
-    (apply #'concatenate
-           'string
-	   (let loop ((ini 0)
-		      (pos (if (eq opt :minus) (+ pos 1) pos)))
-	     (if (< pos len)
-		 (cons (subseq str ini pos)
-		       (cons sep (loop pos (+ pos num))))
-		 (list (subseq str ini len)))))))
 
 ;;; eof
