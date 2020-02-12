@@ -1,8 +1,8 @@
-(cl:in-package :srfi-54.internal)
+(cl:in-package "https://github.com/g000001/srfi-54#internals")
 
-(def-suite srfi-54)
 
-(in-suite srfi-54)
+(def-suite* srfi-54)
+
 
 (defmacro dotests (&body body)
   (do ((*gensym-counter* 0)
@@ -17,6 +17,7 @@
                    es ))))
       ((endp tests)
        `(progn ,@es)) ))
+
 
 (dotests
   (cat 129.995 -10 2.0) => "130.00    "
@@ -40,18 +41,16 @@
   (cat 99.5 10 :sign :octal :exact) => "  #o+307/2"
   (cat #x123 :octal :sign) => "#o+443"
   (cat #x123 -10 2.0 :sign #\*) => "#e+291.00*"
-  #-allegro (cat #c(-1.2345e+15 1.2355e-15) 3.0)
-  #-allegro =>
-  #-allegro "-1.234e15+1.236e-15i"
-  #+allegro (cat #c(-1.2345e+15 1.2355e-15) 3.0)
-  #+allegro =>
+  (cat #c(-1.2345e+15 1.2355e-15) 3.0)
+  =>
+  #-(or lispworks allegro) "-1.234e15+1.236e-15i"
+  #+lispworks "-1.235+1.236i"
   #+allegro "-1.234e+15+1.236e-15i"
-  #-allegro (cat 1.2345e+15 10 3.0 :sign)
-  #-allegro =>
-  #-allegro " +1.234e15"
-  #+allegro (cat 1.2345e+15 10 3.0 :sign)
-  #+allegro =>
+  (cat 1.2345e+15 10 3.0 :sign)
+  =>
+  #-(or allegro lispworks) " +1.234e15"
   #+allegro "+1.234e+15"
+  #+lispworks "    +1.235"
   (cat "string" -10) => "string    "
   (cat "string" 10 (list #'string-upcase)) => "    STRING"
   (cat "string" 10 (list #'string-upcase) '(-2)) => "      RING"
@@ -63,33 +62,37 @@
   (cat '(#\a "str" s)) => "(#\\a \"str\" S)"
 
   (let ((*standard-output* (make-string-output-stream)))
-    (list (cat '(#\a "str" s) T)
+    (list (cat '(#\a "str" s) cl:T)
           (get-output-stream-string *standard-output*) ))
-  => '("(#\\a \"str\" S)" "(#\\a \"str\" S)")
-
+  =>
+  '("(#\\a \"str\" S)"
+    "(#\\a \"str\" S)")
+  
   (let ((*standard-output* (make-string-output-stream)))
     (list (cat '(#\a "str" s) *standard-output*)
           (get-output-stream-string *standard-output*) ))
-  => '("(#\\a \"str\" S)" "(#\\a \"str\" S)")
+  => '("(#\\a \"str\" S)"
+       "(#\\a \"str\" S)")
 
   (cat 3 (cat 's) " " (cat "str" (lambda (obj srm) (write obj :stream srm))))
   => "3S \"str\""
 
   (let ((*standard-output* (make-string-output-stream)))
-    (list (cat 3 T (cat 's) " " (cat "str"
+    (list (cat 3 cl:T (cat 's) " " (cat "str"
                                      (lambda (obj srm) (write obj :stream srm)) ))
           (get-output-stream-string *standard-output*) ))
   => '("3S \"str\"" "3S \"str\"")
 
 
   (let ((*standard-output* (make-string-output-stream)))
-    (list (cat 3 T (cat 's T) " "
+    (list (cat 3 cl:T (cat 's cl:T) " "
                (cat "str"
                     (lambda (obj srm) (write obj :stream srm)) ))
           (get-output-stream-string *standard-output*) ))
   => '("3S \"str\"" "S3S \"str\"")
 
   )
+
 
 (progn
   (defstruct (example
@@ -125,6 +128,7 @@
                    object string-port)))
     )
 
+
 (dotests
   (cat ex) => "#S(EXAMPLE :NUM 123 :STR \"string\")"
   (cat ex 20 #'record-writer) => "          123-string"
@@ -150,4 +154,5 @@
   => "----------123-string"
   )
 
-;;; eof
+
+;;; *EOF*

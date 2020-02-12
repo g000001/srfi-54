@@ -1,6 +1,21 @@
 ;;;; srfi-54.lisp
 
-(cl:in-package :srfi-54.internal)
+(cl:in-package "https://github.com/g000001/srfi-54#internals")
+
+(defun std-princ-to-string (obj)
+  (#|with-standard-io-syntax|#
+   let ((*print-case* :upcase))
+    (princ-to-string obj)))
+
+(defun std-write (&rest args)
+  (#|with-standard-io-syntax|#
+   let ((*print-case* :upcase))
+    (apply #'write args)))
+
+(defun std-princ (&rest args)
+  (#|with-standard-io-syntax|#
+   let ((*print-case* :upcase))
+    (apply #'princ args)))
 
 (define-syntax alet-cat*                ; borrowed from SRFI-86
   (syntax-rules ()
@@ -11,17 +26,17 @@
 
 (define-syntax %alet-cat*               ; borrowed from SRFI-86
   (syntax-rules ()
-    ((%alet-cat* z ((n d \t ***)) bd ***)
+    ((%alet-cat* z ((n d t ***)) bd ***)
      (let ((n (if (null z)
 		  d
 		  (if (null (cdr z))
-		      (wow-cat-end z n \t ***)
+		      (wow-cat-end z n t ***)
 		      (error "alet*: too many arguments" (cdr z))))))
        bd ***))
-    ((%alet-cat* z ((n d \t ***) . e) bd ***)
+    ((%alet-cat* z ((n d t ***) . e) bd ***)
      (let ((n (if (null z)
 		  d
-                  (wow-cat! z n d \t ***))))
+                  (wow-cat! z n d t ***))))
        (%alet-cat* z e bd ***)))
     ((%alet-cat* z e bd ***)
      (let ((e z))
@@ -33,33 +48,33 @@
      (let ((n (car z)))
        (setq z (cdr z))
        n))
-    ((wow-cat! z n d \t)
+    ((wow-cat! z n d t)
      (with ((lp (gensym)))
        (let ((n (car z)))
-         (if \t
+         (if t
              (progn (setq z (cdr z)) n)
              (let lp ((head (list n)) (tail (cdr z)))
                   (if (null tail)
                       d
                       (let ((n (car tail)))
-                        (if \t
+                        (if t
                             (progn (setq z (append (reverse head) (cdr tail))) n)
                             (lp (cons n head) (cdr tail))))))))))
-    ((wow-cat! z n d \t ts)
+    ((wow-cat! z n d t ts)
      (with ((lp (gensym)))
        (let ((n (car z)))
-         (if \t
+         (if t
              (progn (setq z (cdr z)) ts)
              (let lp ((head (list n)) (tail (cdr z)))
                   (if (null tail)
                       d
                       (let ((n (car tail)))
-                        (if \t
+                        (if t
                             (progn (setq z (append (reverse head) (cdr tail))) ts)
                             (lp (cons n head) (cdr tail))))))))))
-    ((wow-cat! z n d \t ts fs)
+    ((wow-cat! z n d t ts fs)
      (let ((n (car z)))
-       (if \t
+       (if t
 	   (progn (setq z (cdr z)) ts)
 	   (progn (setq z (cdr z)) fs))))))
 
@@ -67,15 +82,15 @@
   (syntax-rules ()
     ((wow-cat-end z n)
      (car z))
-    ((wow-cat-end z n \t)
+    ((wow-cat-end z n t)
      (let ((n (car z)))
-       (if \t n (error "alet[*]: too many argument" z))))
-    ((wow-cat-end z n \t ts)
+       (if t n (error "alet[*]: too many argument" z))))
+    ((wow-cat-end z n t ts)
      (let ((n (car z)))
-       (if \t ts (error "alet[*]: too many argument" z))))
-    ((wow-cat-end z n \t ts fs)
+       (if t ts (error "alet[*]: too many argument" z))))
+    ((wow-cat-end z n t ts fs)
      (let ((n (car z)))
-       (if \t ts fs)))))
+       (if t ts fs)))))
 
 (defun str-index (str char)
   (let ((len (length str)))
@@ -99,7 +114,7 @@
      (:else (lp (cdr ls) true (cons (car ls) false))))))
 
 (defun e-mold (num pre)
-  (let* ((str (princ-to-string (float num)))
+  (let* ((str (std-princ-to-string (float num)))
 	 (e-index (str-index str #\e)))
     (if e-index
 	(concatenate 'string
@@ -130,7 +145,7 @@
 		    (char-list
 		     (reverse
 		      (let lp ((index (- (length str) 1))
-			       (raise T))
+			       (raise cl:T))
 			(if (= -1 index)
 			    (if raise '(#\1) '())
 			    (let ((chr (char str index)))
@@ -176,7 +191,7 @@
 	(apply #'concatenate
                'string
 	       (cond
-                 ((numberp object) (princ-to-string object))
+                 ((numberp object) (std-princ-to-string object))
                  ((stringp object) object)
                  ((characterp object) (string object))
                  ((typep object 'boolean) (if object "T" "nil"))
@@ -184,7 +199,7 @@
                  (:else
                   (get-output-stream-string
                    (let ((str-port (make-string-output-stream)))
-                     (write object :stream str-port)
+                     (std-write object :stream str-port)
                      str-port ))))
 	       str-list )
         (alet-cat* rest-list
@@ -192,7 +207,7 @@
           (port nil (or (typep port 'boolean)
                         (and (streamp port)
                              (output-stream-p port)))
-                (if (eq port T) *standard-output* port) )
+                (if (eq port cl:T) *standard-output* port) )
           (char #\space (characterp char))
           (converter nil (and (consp converter)
                               (functionp (car converter))
@@ -300,14 +315,14 @@
                                       (concatenate 'string
                                        (separate (subseq str 0 dot-index)
                                                  sep num (if (< object 0)
-                                                             :minus T))
+                                                             :minus cl:T))
                                        "."
                                        (separate (subseq
                                                   str (+ 1 dot-index)
                                                   (length str) )
                                                  sep num nil))
                                       (separate str sep num (if (< object 0)
-                                                                :minus T))))
+                                                                :minus cl:T))))
                                 str ))
                            (pad (- (abs width)
                                    (+ (length str)
@@ -357,7 +372,7 @@
                                   ((symbolp object) (symbol-name object))
                                   (:else (get-output-stream-string
                                           (let ((str-port (make-string-output-stream)))
-                                            (write object :stream str-port)
+                                            (std-write object :stream str-port)
                                             str-port )))))
                            (str (if pipe
                                     (let loop ((str (funcall (car pipe) str))
@@ -406,7 +421,7 @@
                                       (make-string pad
                                                    :initial-element char))))))))
                 (str (apply #'concatenate 'string str str-list)) )
-           (and port (princ str port))
+           (and port (std-princ str port))
            str )))))
 
 ;;; eof
